@@ -1,0 +1,18 @@
+{
+  "$schema": "wire-cross-lang-v1",
+  "type": "Tick",
+  "schema_version": 1,
+  "payload": {
+    "symbol": "BTCUSDT",
+    "bid": {
+      "mantissa": "49999",
+      "scale": 0
+    },
+    "ask": {
+      "mantissa": "50001",
+      "scale": 0
+    },
+    "ts": 1700000000123000000
+  },
+  "notes": "canonical committed Tick v1.2 剖面。"
+}

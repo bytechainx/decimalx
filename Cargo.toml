@@ -1,0 +1,54 @@
+[package]
+name = "decimalx"
+version = "0.1.8"
+edition = "2024"
+rust-version = "1.88"
+description = "精确十进制、货币、价格与数量值对象"
+license = "MIT"
+repository = "https://github.com/bytechainx/decimalx"
+homepage = "https://github.com/bytechainx/decimalx"
+documentation = "https://github.com/bytechainx/decimalx#readme"
+readme = "README.md"
+publish = false
+include = ["src/**/*", "tests/**/*", "benches/**/*", "examples/**/*", "docs/**/*", "README.md", "CHANGELOG.md", "CONTEXT.md", "CONTRIBUTING.md", "LICENSE", "Cargo.toml"]
+
+[lib]
+name = "decimalx"
+
+[features]
+default = []
+# 可选：`impl Add/Sub/Mul for Decimal`（溢出 panic）。生产资金路径必须保持关闭，改用 checked_*。
+panicking-ops = []
+
+[dependencies]
+# path + version：满足 cargo-deny bans.wildcards=deny（禁止裸 path 通配依赖）
+kernel = { version = "0.4.2", path = "../kernel" }
+serde = { version = "1", features = ["derive"] }
+
+[dev-dependencies]
+bigdecimal = "0.4"
+proptest = "1"
+serde_json = "1"
+
+[lints.rust]
+private_interfaces = "deny"
+private_bounds = "deny"
+unused_must_use = "warn"
+
+[lints.clippy]
+unwrap_used = "deny"
+expect_used = "deny"
+panic = "deny"
+unreachable = "deny"
+todo = "deny"
+unimplemented = "deny"
+
+[[bench]]
+name = "hot_path"
+harness = false
+
+[package.metadata.bytechainx]
+module_id = "decimalx"
+owner = "bytechainx"
+role = "kernel"
+semantic_contract = "docs/标准.md"
