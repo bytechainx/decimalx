@@ -26,100 +26,17 @@
 #![deny(missing_docs)]
 #![deny(unreachable_pub)]
 
-use kernel::XError;
 use serde::de::{self, Deserializer};
 use serde::{Deserialize, Serialize, Serializer};
 use std::cmp::Ordering;
-use std::fmt;
 use std::hash::{Hash, Hasher};
-use std::str::FromStr;
 
-// ---------------------------------------------------------------------------
-// DecimalError
-// ---------------------------------------------------------------------------
+mod error;
+mod text;
+mod types;
 
-/// 十进制运算与构造错误（可分类；用户可见 `Display` 为中文）。
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub enum DecimalError {
-    /// scale 超出 [`MAX_SCALE`]。
-    ScaleOutOfRange {
-        /// 实际 scale。
-        scale: u8,
-        /// 允许的最大 scale（[`MAX_SCALE`]）。
-        max: u8,
-    },
-    /// mantissa 解析或运算溢出。
-    MantissaOverflow,
-    /// 除数为零。
-    DivisionByZero,
-    /// 舍入步进导致溢出。
-    RoundingOverflow,
-    /// 表示范围不足（对齐/中间值等）。
-    RepresentationOverflow,
-    /// 解析失败。
-    Parse(String),
-    /// 币种非法。
-    InvalidCurrency,
-}
-
-impl DecimalError {
-    /// 错误分类（便于 match，不依赖字符串）。
-    pub fn kind(&self) -> DecimalErrorKind {
-        match self {
-            Self::ScaleOutOfRange { .. } => DecimalErrorKind::Scale,
-            Self::MantissaOverflow => DecimalErrorKind::Mantissa,
-            Self::DivisionByZero => DecimalErrorKind::DivisionByZero,
-            Self::RoundingOverflow => DecimalErrorKind::Rounding,
-            Self::RepresentationOverflow => DecimalErrorKind::Representation,
-            Self::Parse(_) => DecimalErrorKind::Parse,
-            Self::InvalidCurrency => DecimalErrorKind::Currency,
-        }
-    }
-}
-
-/// [`DecimalError`] 的稳定分类标签。
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub enum DecimalErrorKind {
-    /// scale 越界
-    Scale,
-    /// mantissa 溢出
-    Mantissa,
-    /// 除零
-    DivisionByZero,
-    /// 舍入溢出
-    Rounding,
-    /// 表示/中间值范围
-    Representation,
-    /// 解析
-    Parse,
-    /// 币种
-    Currency,
-}
-
-impl fmt::Display for DecimalError {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            Self::ScaleOutOfRange { scale, max } => {
-                write!(f, "十进制 scale {scale} 超过上限 {max}")
-            }
-            Self::MantissaOverflow => write!(f, "十进制 mantissa 溢出"),
-            Self::DivisionByZero => write!(f, "十进制除零"),
-            Self::RoundingOverflow => write!(f, "十进制舍入溢出"),
-            Self::RepresentationOverflow => write!(f, "十进制表示范围不足（中间值溢出）"),
-            Self::Parse(msg) => write!(f, "十进制解析失败: {msg}"),
-            Self::InvalidCurrency => write!(f, "币种必须为 3 个大写 ASCII 字母"),
-        }
-    }
-}
-
-impl std::error::Error for DecimalError {}
-
-impl From<DecimalError> for XError {
-    fn from(err: DecimalError) -> Self {
-        let context = err.to_string();
-        XError::invalid(context).with_source(err)
-    }
-}
+pub use error::{DecimalError, DecimalErrorKind};
+pub use types::{Currency, Money, Price, Qty, Ratio};
 
 /// 十进制 API 的 `Result` 别名。
 pub type DecimalResult<T> = Result<T, DecimalError>;
@@ -154,6 +71,13 @@ impl DecimalLimits {
 /// serde 按 `{mantissa, scale}` 字段序列化；**写入**时 `mantissa` 为十进制字符串；
 /// **读取**兼容历史 JSON 整数 `mantissa`；反序列化强制 `scale ≤ MAX_SCALE`。
 /// 字段私有：非法 scale 不可表示。
+///
+/// # Examples
+///
+/// ```
+/// let value = decimalx::Decimal::try_new(125, 2);
+/// assert!(value.is_ok());
+/// ```
 #[derive(Debug, Clone, Copy)]
 pub struct Decimal {
     /// 定点整数 mantissa。
@@ -287,6 +211,7 @@ impl Decimal {
         }
         let diff = u32::from(target - self.scale);
         // 不变量：target ≤ MAX_SCALE 且 self.scale ≥ 0 ⇒ diff ≤ MAX_SCALE，pow10 必落入 i128
+        // PANIC: 上述范围约束保证该幂次可表示；约束变化时应改为传播错误。
         let factor = Self::pow10(diff).expect("diff <= MAX_SCALE ensures pow10 fits i128");
         let mantissa =
             self.mantissa.checked_mul(factor).ok_or(DecimalError::RepresentationOverflow)?;
@@ -379,11 +304,13 @@ impl Decimal {
         // exp = (target_scale - self.scale) + other.scale ≥ 0
         let exp = u32::from(target_scale - self.scale) + u32::from(other.scale);
         // 不变量：exp ≤ 2*MAX_SCALE，pow10 必落入 i128
+        // PANIC: scale 上限保证该幂次可表示；调整上限时须复核。
         let factor = Self::pow10(exp).expect("exp <= 2*MAX_SCALE ensures pow10 fits i128");
         let numerator = self.mantissa.checked_mul(factor).ok_or(DecimalError::MantissaOverflow)?;
         let denominator = other.mantissa;
         // 不变量：i128::MIN / -1 会溢出，故 div 成功（q 为 Some）则 rem 必成功
         let q = numerator.checked_div(denominator).ok_or(DecimalError::MantissaOverflow)?;
+        // PANIC: 成功除法已排除 i128::MIN / -1，余数运算不会再溢出。
         let r = numerator.checked_rem(denominator).expect("rem succeeds when div succeeds");
         let rounded = apply_rounding(q, r, denominator, strategy)?;
         Decimal { mantissa: rounded, scale: target_scale }.finish()
@@ -404,6 +331,7 @@ impl Decimal {
     // 不变量：本方法为显式 panic 便捷封装，溢出即 fail-fast；已提供 checked_rescale 作为非 panic 替代
     #[allow(clippy::expect_used)]
     pub fn rescale(self, target_scale: u8, strategy: RoundingStrategy) -> Decimal {
+        // PANIC: 此便捷 API 将 checked_rescale 的错误映射为 panic；调用方可改用 checked_rescale。
         self.checked_rescale(target_scale, strategy).expect("decimal rescale overflow")
     }
 
@@ -425,6 +353,7 @@ impl Decimal {
         }
         let diff = u32::from(self.scale - target_scale);
         // 不变量：self.scale ≤ MAX_SCALE 且 target_scale ≥ 0 ⇒ diff ≤ MAX_SCALE，pow10 必落入 i128
+        // PANIC: 合法 scale 差值保证该幂次可表示；调整上限时须复核。
         let factor = Self::pow10(diff).expect("diff <= MAX_SCALE ensures pow10 fits i128");
         let q = self.mantissa.checked_div(factor).ok_or(DecimalError::MantissaOverflow)?;
         let r = self.mantissa.checked_rem(factor).ok_or(DecimalError::MantissaOverflow)?;
@@ -513,6 +442,7 @@ impl From<isize> for Decimal {
     // 不变量：目标平台 isize 宽度 ≤ 64，恒落入 i128 表示范围
     #[allow(clippy::expect_used)]
     fn from(value: isize) -> Self {
+        // PANIC: 当前 Rust 目标平台的 isize 不宽于 i128；若目标 ABI 改变须重新验证。
         Self { mantissa: i128::try_from(value).expect("isize 超出 i128 表示范围"), scale: 0 }
     }
 }
@@ -525,6 +455,7 @@ impl From<usize> for Decimal {
     // 不变量：目标平台 usize 宽度 ≤ 64，恒落入 i128 表示范围
     #[allow(clippy::expect_used)]
     fn from(value: usize) -> Self {
+        // PANIC: 当前 Rust 目标平台的 usize 不宽于 i128；若目标 ABI 改变须重新验证。
         Self { mantissa: i128::try_from(value).expect("usize 超出 i128 表示范围"), scale: 0 }
     }
 }
@@ -543,6 +474,7 @@ impl std::iter::Sum for Decimal {
     // 不变量：本 impl 显式对齐 panicking-ops 语义（溢出 fail-fast）；非资金路径，已提供 fold + checked_add 替代
     #[allow(clippy::expect_used)]
     fn sum<I: Iterator<Item = Self>>(iter: I) -> Self {
+        // PANIC: 该标准 trait 保持显式 fail-fast 求和语义；资金路径应使用 checked_add。
         iter.fold(Self::ZERO, |acc, x| acc.checked_add(x).expect("decimal sum overflow"))
     }
 }
@@ -552,124 +484,8 @@ impl<'a> std::iter::Sum<&'a Decimal> for Decimal {
     // 不变量：同 `Sum`，显式对齐 panicking-ops 语义（溢出 fail-fast）
     #[allow(clippy::expect_used)]
     fn sum<I: Iterator<Item = &'a Decimal>>(iter: I) -> Self {
+        // PANIC: 该标准 trait 保持显式 fail-fast 求和语义；资金路径应使用 checked_add。
         iter.fold(Self::ZERO, |acc, x| acc.checked_add(*x).expect("decimal sum overflow"))
-    }
-}
-
-impl FromStr for Decimal {
-    type Err = DecimalError;
-
-    /// 解析十进制字符串（如 `"100"` / `"100.5"` / `"-1.25"`）。
-    ///
-    /// 禁止 `NaN` / `Inf` 等非有限表示；非法输入返回 [`DecimalError`]。
-    fn from_str(s: &str) -> DecimalResult<Self> {
-        let s = s.trim();
-        if s.is_empty() {
-            return Err(DecimalError::Parse("空字符串".into()));
-        }
-
-        let lower = s.to_ascii_lowercase();
-        if matches!(
-            lower.as_str(),
-            "nan" | "inf" | "+inf" | "-inf" | "infinity" | "+infinity" | "-infinity"
-        ) {
-            return Err(DecimalError::Parse("不允许 NaN/Inf".into()));
-        }
-
-        let (negative, body) = if let Some(rest) = s.strip_prefix('-') {
-            (true, rest)
-        } else if let Some(rest) = s.strip_prefix('+') {
-            (false, rest)
-        } else {
-            (false, s)
-        };
-
-        if body.is_empty() {
-            return Err(DecimalError::Parse(format!("非法十进制: {s}")));
-        }
-
-        if body.bytes().filter(|&b| b == b'.').count() > 1 {
-            return Err(DecimalError::Parse(format!("非法十进制: {s}")));
-        }
-
-        let (int_part, frac_part) = match body.split_once('.') {
-            Some((i, f)) => (i, f),
-            None => (body, ""),
-        };
-
-        if int_part.is_empty() && frac_part.is_empty() {
-            return Err(DecimalError::Parse(format!("非法十进制: {s}")));
-        }
-        if !int_part.is_empty() && !int_part.bytes().all(|b| b.is_ascii_digit()) {
-            return Err(DecimalError::Parse(format!("非法十进制: {s}")));
-        }
-        if !frac_part.bytes().all(|b| b.is_ascii_digit()) {
-            return Err(DecimalError::Parse(format!("非法十进制: {s}")));
-        }
-
-        let fraction_len = frac_part.len();
-        let scale = u8::try_from(fraction_len).map_err(|_| {
-            DecimalError::Parse(format!("小数位数 {fraction_len} 超过可表示范围 {}", u8::MAX))
-        })?;
-        if scale > MAX_SCALE {
-            return Err(DecimalError::ScaleOutOfRange { scale, max: MAX_SCALE });
-        }
-
-        let digits = if int_part.is_empty() {
-            frac_part.to_string()
-        } else if frac_part.is_empty() {
-            int_part.to_string()
-        } else {
-            format!("{int_part}{frac_part}")
-        };
-
-        let magnitude: u128 = if digits.is_empty() || digits.bytes().all(|b| b == b'0') {
-            0
-        } else {
-            digits.parse::<u128>().map_err(|_| DecimalError::MantissaOverflow)?
-        };
-
-        let mantissa = if negative {
-            const I128_MIN_MAGNITUDE: u128 = i128::MIN.unsigned_abs();
-            if magnitude == I128_MIN_MAGNITUDE {
-                i128::MIN
-            } else {
-                let positive: i128 =
-                    magnitude.try_into().map_err(|_| DecimalError::MantissaOverflow)?;
-                -positive
-            }
-        } else {
-            magnitude.try_into().map_err(|_| DecimalError::MantissaOverflow)?
-        };
-
-        Decimal { mantissa, scale }.finish()
-    }
-}
-
-impl fmt::Display for Decimal {
-    /// 规范化展示：去掉无意义尾随小数零；纯整数不带小数点。
-    ///
-    /// 例：`100.0` → `"100"`，`10.50` → `"10.5"`，`0.00` → `"0"`。
-    #[allow(clippy::expect_used)]
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        let n = self.normalize();
-        if n.scale == 0 {
-            return write!(f, "{}", n.mantissa);
-        }
-
-        let neg = n.mantissa < 0;
-        let abs = n.mantissa.unsigned_abs();
-        // 不变量：scale ≤ MAX_SCALE 时 10^scale 可装入 u128
-        let divisor = 10u128
-            .checked_pow(u32::from(n.scale))
-            .expect("scale <= MAX_SCALE ensures 10^scale fits u128");
-        let int_part = abs / divisor;
-        let frac_part = abs % divisor;
-        if neg {
-            write!(f, "-{int_part}.{:0width$}", frac_part, width = n.scale as usize)
-        } else {
-            write!(f, "{int_part}.{:0width$}", frac_part, width = n.scale as usize)
-        }
     }
 }
 
@@ -690,6 +506,7 @@ impl std::ops::Add for Decimal {
     // 不变量：本 impl 仅在 panicking-ops feature 下编译（默认关闭），显式溢出 fail-fast；生产须用 checked_add
     #[allow(clippy::expect_used)]
     fn add(self, other: Decimal) -> Decimal {
+        // PANIC: 此 feature 运算符明确采用溢出即失败语义；资金路径应使用 checked_add。
         self.checked_add(other).expect("decimal add overflow")
     }
 }
@@ -707,6 +524,7 @@ impl std::ops::Sub for Decimal {
     // 不变量：仅 panicking-ops feature 下编译，显式溢出 fail-fast；生产须用 checked_sub
     #[allow(clippy::expect_used)]
     fn sub(self, other: Decimal) -> Decimal {
+        // PANIC: 此 feature 运算符明确采用溢出即失败语义；资金路径应使用 checked_sub。
         self.checked_sub(other).expect("decimal sub overflow")
     }
 }
@@ -724,6 +542,7 @@ impl std::ops::Mul for Decimal {
     // 不变量：仅 panicking-ops feature 下编译，显式溢出 fail-fast；生产须用 checked_mul
     #[allow(clippy::expect_used)]
     fn mul(self, other: Decimal) -> Decimal {
+        // PANIC: 此 feature 运算符明确采用溢出即失败语义；资金路径应使用 checked_mul。
         self.checked_mul(other).expect("decimal mul overflow")
     }
 }
@@ -780,183 +599,6 @@ fn apply_rounding(q: i128, r: i128, d: i128, strategy: RoundingStrategy) -> Deci
         q.checked_sub(1).ok_or(DecimalError::RoundingOverflow)
     } else {
         q.checked_add(1).ok_or(DecimalError::RoundingOverflow)
-    }
-}
-
-/// 价格（newtype，spec §4.2）。内部值私有，仅能包裹已校验 [`Decimal`]。
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
-#[serde(transparent)]
-pub struct Price(Decimal);
-
-impl Price {
-    /// 由已校验 [`Decimal`] 构造。
-    pub const fn new(d: Decimal) -> Self {
-        Self(d)
-    }
-    /// 查看内部十进制值。
-    pub const fn as_decimal(self) -> Decimal {
-        self.0
-    }
-    /// 取出内部十进制值。
-    pub const fn into_inner(self) -> Decimal {
-        self.0
-    }
-}
-
-/// 数量（newtype，spec §4.2）。
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
-#[serde(transparent)]
-pub struct Qty(Decimal);
-
-impl Qty {
-    /// 由已校验 [`Decimal`] 构造。
-    pub const fn new(d: Decimal) -> Self {
-        Self(d)
-    }
-    /// 查看内部十进制值。
-    pub const fn as_decimal(self) -> Decimal {
-        self.0
-    }
-    /// 取出内部十进制值。
-    pub const fn into_inner(self) -> Decimal {
-        self.0
-    }
-}
-
-/// 比率（newtype，spec §4.2）。
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
-#[serde(transparent)]
-pub struct Ratio(Decimal);
-
-impl Ratio {
-    /// 由已校验 [`Decimal`] 构造。
-    pub const fn new(d: Decimal) -> Self {
-        Self(d)
-    }
-    /// 查看内部十进制值。
-    pub const fn as_decimal(self) -> Decimal {
-        self.0
-    }
-    /// 取出内部十进制值。
-    pub const fn into_inner(self) -> Decimal {
-        self.0
-    }
-}
-
-/// ISO 4217 风格币种标识（3 字节大写 ASCII）。字段私有；仅合法币种可构造。
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub struct Currency([u8; 3]);
-
-impl Currency {
-    /// 将内部 3 字节解释为 UTF-8（构造不变量保证合法大写 ASCII）。
-    // 不变量：Currency 字段私有，仅 try_new / Deserialize 校验大写 ASCII 后构造，恒为合法 UTF-8
-    #[allow(clippy::expect_used)]
-    pub fn as_str(&self) -> &str {
-        std::str::from_utf8(&self.0).expect("currency invariant: uppercase ASCII")
-    }
-
-    /// 原始三字节。
-    pub const fn as_bytes(self) -> [u8; 3] {
-        self.0
-    }
-
-    /// 生产构造：三字节均须为大写 ASCII 字母。
-    pub fn try_new(bytes: [u8; 3]) -> DecimalResult<Self> {
-        if !bytes.iter().all(|c| c.is_ascii_uppercase()) {
-            return Err(DecimalError::InvalidCurrency);
-        }
-        Ok(Self(bytes))
-    }
-
-    /// 当前字节是否全部为大写 ASCII（构造成功后恒 true）。
-    pub fn is_valid(self) -> bool {
-        self.0.iter().all(|c| c.is_ascii_uppercase())
-    }
-
-    /// 校验后返回自身，否则 `Err`。
-    pub fn validate(self) -> DecimalResult<Self> {
-        Self::try_new(self.0)
-    }
-}
-
-impl Serialize for Currency {
-    fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
-        self.0.serialize(serializer)
-    }
-}
-
-impl<'de> Deserialize<'de> for Currency {
-    fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
-        let bytes = <[u8; 3]>::deserialize(deserializer)?;
-        Currency::try_new(bytes).map_err(de::Error::custom)
-    }
-}
-
-impl std::str::FromStr for Currency {
-    type Err = DecimalError;
-
-    fn from_str(s: &str) -> DecimalResult<Self> {
-        let b = s.as_bytes();
-        if b.len() != 3 {
-            return Err(DecimalError::InvalidCurrency);
-        }
-        let mut arr = [0u8; 3];
-        arr.copy_from_slice(b);
-        Self::try_new(arr)
-    }
-}
-
-/// 金额（spec §4.2）。字段私有；生产请用 [`Money::try_new`]。
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct Money {
-    amount: Decimal,
-    currency: Currency,
-}
-
-impl Money {
-    /// 生产构造：同时校验 amount scale 与 currency 合法性。
-    pub fn try_new(amount: Decimal, currency: Currency) -> DecimalResult<Self> {
-        let amount = amount.validate()?;
-        let currency = currency.validate()?;
-        Ok(Self { amount, currency })
-    }
-
-    /// 金额数值。
-    pub const fn amount(self) -> Decimal {
-        self.amount
-    }
-
-    /// 币种。
-    pub const fn currency(self) -> Currency {
-        self.currency
-    }
-
-    /// 校验 amount/currency 后返回自身。
-    pub fn validate(self) -> DecimalResult<Self> {
-        Self::try_new(self.amount, self.currency)
-    }
-}
-
-impl Serialize for Money {
-    fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
-        use serde::ser::SerializeStruct;
-        let mut st = serializer.serialize_struct("Money", 2)?;
-        st.serialize_field("amount", &self.amount)?;
-        st.serialize_field("currency", &self.currency)?;
-        st.end()
-    }
-}
-
-impl<'de> Deserialize<'de> for Money {
-    fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
-        #[derive(Deserialize)]
-        #[serde(deny_unknown_fields)]
-        struct MoneyWire {
-            amount: Decimal,
-            currency: Currency,
-        }
-        let w = MoneyWire::deserialize(deserializer)?;
-        Money::try_new(w.amount, w.currency).map_err(de::Error::custom)
     }
 }
 
