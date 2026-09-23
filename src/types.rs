@@ -73,7 +73,7 @@ impl Currency {
     #[allow(clippy::expect_used)]
     pub fn as_str(&self) -> &str {
         // PANIC: 私有字段只允许通过大写 ASCII 校验构造，故 UTF-8 转换恒成功。
-        std::str::from_utf8(&self.0).expect("currency invariant: uppercase ASCII")
+        std::str::from_utf8(&self.0).expect("币种字段不变量：内容必须为大写 ASCII")
     }
 
     /// 原始三字节。

@@ -17,10 +17,19 @@ fn assert_duties() {
 fn assert_scope() {
     assert!(STANDARD.contains("## 范围"));
     assert!(STANDARD.contains("Decimal"));
+    assert_eq!(decimalx::MAX_SCALE, 18);
+    assert!(decimalx::Decimal::try_new(1, decimalx::MAX_SCALE).is_ok());
+    assert!(decimalx::Decimal::try_new(1, decimalx::MAX_SCALE + 1).is_err());
 }
 
 #[test]
 fn assert_constraints() {
     assert!(STANDARD.contains("## 约束"));
     assert!(STANDARD.contains("checked_"));
+    let overflow = decimalx::Decimal::MAX
+        .checked_add(decimalx::Decimal::ONE)
+        .expect_err("定点加法溢出必须返回错误");
+    assert_eq!(overflow, decimalx::DecimalError::RepresentationOverflow);
+    let invalid_wire = format!(r#"{{"mantissa":"1","scale":{}}}"#, decimalx::MAX_SCALE + 1);
+    assert!(serde_json::from_str::<decimalx::Decimal>(&invalid_wire).is_err());
 }

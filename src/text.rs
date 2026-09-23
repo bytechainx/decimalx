@@ -111,7 +111,7 @@ impl fmt::Display for Decimal {
         let divisor = 10u128
             .checked_pow(u32::from(n.scale))
             // PANIC: n.scale 受 MAX_SCALE 限制，10 的该次幂可由 u128 表示。
-            .expect("scale <= MAX_SCALE ensures 10^scale fits u128");
+            .expect("scale <= MAX_SCALE 保证 10 的幂可由 u128 表示");
         let int_part = abs / divisor;
         let frac_part = abs % divisor;
         if neg {

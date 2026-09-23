@@ -95,7 +95,7 @@ impl Decimal {
     ///
     /// `scale > MAX_SCALE` 时 panic。
     pub const fn new(mantissa: i128, scale: u8) -> Self {
-        assert!(scale <= MAX_SCALE, "decimal scale exceeds MAX_SCALE");
+        assert!(scale <= MAX_SCALE, "十进制小数位数超过 MAX_SCALE");
         Self { mantissa, scale }
     }
 
@@ -212,7 +212,7 @@ impl Decimal {
         let diff = u32::from(target - self.scale);
         // 不变量：target ≤ MAX_SCALE 且 self.scale ≥ 0 ⇒ diff ≤ MAX_SCALE，pow10 必落入 i128
         // PANIC: 上述范围约束保证该幂次可表示；约束变化时应改为传播错误。
-        let factor = Self::pow10(diff).expect("diff <= MAX_SCALE ensures pow10 fits i128");
+        let factor = Self::pow10(diff).expect("diff <= MAX_SCALE 保证 10 的幂可由 i128 表示");
         let mantissa =
             self.mantissa.checked_mul(factor).ok_or(DecimalError::RepresentationOverflow)?;
         Ok(Decimal { mantissa, scale: target })
@@ -305,13 +305,13 @@ impl Decimal {
         let exp = u32::from(target_scale - self.scale) + u32::from(other.scale);
         // 不变量：exp ≤ 2*MAX_SCALE，pow10 必落入 i128
         // PANIC: scale 上限保证该幂次可表示；调整上限时须复核。
-        let factor = Self::pow10(exp).expect("exp <= 2*MAX_SCALE ensures pow10 fits i128");
+        let factor = Self::pow10(exp).expect("exp <= 2*MAX_SCALE 保证 10 的幂可由 i128 表示");
         let numerator = self.mantissa.checked_mul(factor).ok_or(DecimalError::MantissaOverflow)?;
         let denominator = other.mantissa;
         // 不变量：i128::MIN / -1 会溢出，故 div 成功（q 为 Some）则 rem 必成功
         let q = numerator.checked_div(denominator).ok_or(DecimalError::MantissaOverflow)?;
         // PANIC: 成功除法已排除 i128::MIN / -1，余数运算不会再溢出。
-        let r = numerator.checked_rem(denominator).expect("rem succeeds when div succeeds");
+        let r = numerator.checked_rem(denominator).expect("除法成功时余数运算也应成功");
         let rounded = apply_rounding(q, r, denominator, strategy)?;
         Decimal { mantissa: rounded, scale: target_scale }.finish()
     }
@@ -332,7 +332,7 @@ impl Decimal {
     #[allow(clippy::expect_used)]
     pub fn rescale(self, target_scale: u8, strategy: RoundingStrategy) -> Decimal {
         // PANIC: 此便捷 API 将 checked_rescale 的错误映射为 panic；调用方可改用 checked_rescale。
-        self.checked_rescale(target_scale, strategy).expect("decimal rescale overflow")
+        self.checked_rescale(target_scale, strategy).expect("十进制缩放溢出")
     }
 
     /// 显式缩位/扩位；溢出/非法返回 `Err`。
@@ -354,7 +354,7 @@ impl Decimal {
         let diff = u32::from(self.scale - target_scale);
         // 不变量：self.scale ≤ MAX_SCALE 且 target_scale ≥ 0 ⇒ diff ≤ MAX_SCALE，pow10 必落入 i128
         // PANIC: 合法 scale 差值保证该幂次可表示；调整上限时须复核。
-        let factor = Self::pow10(diff).expect("diff <= MAX_SCALE ensures pow10 fits i128");
+        let factor = Self::pow10(diff).expect("diff <= MAX_SCALE 保证 10 的幂可由 i128 表示");
         let q = self.mantissa.checked_div(factor).ok_or(DecimalError::MantissaOverflow)?;
         let r = self.mantissa.checked_rem(factor).ok_or(DecimalError::MantissaOverflow)?;
         let rounded = apply_rounding(q, r, factor, strategy)?;
@@ -475,7 +475,7 @@ impl std::iter::Sum for Decimal {
     #[allow(clippy::expect_used)]
     fn sum<I: Iterator<Item = Self>>(iter: I) -> Self {
         // PANIC: 该标准 trait 保持显式 fail-fast 求和语义；资金路径应使用 checked_add。
-        iter.fold(Self::ZERO, |acc, x| acc.checked_add(x).expect("decimal sum overflow"))
+        iter.fold(Self::ZERO, |acc, x| acc.checked_add(x).expect("十进制求和溢出"))
     }
 }
 
@@ -485,7 +485,7 @@ impl<'a> std::iter::Sum<&'a Decimal> for Decimal {
     #[allow(clippy::expect_used)]
     fn sum<I: Iterator<Item = &'a Decimal>>(iter: I) -> Self {
         // PANIC: 该标准 trait 保持显式 fail-fast 求和语义；资金路径应使用 checked_add。
-        iter.fold(Self::ZERO, |acc, x| acc.checked_add(*x).expect("decimal sum overflow"))
+        iter.fold(Self::ZERO, |acc, x| acc.checked_add(*x).expect("十进制求和溢出"))
     }
 }
 
@@ -507,7 +507,7 @@ impl std::ops::Add for Decimal {
     #[allow(clippy::expect_used)]
     fn add(self, other: Decimal) -> Decimal {
         // PANIC: 此 feature 运算符明确采用溢出即失败语义；资金路径应使用 checked_add。
-        self.checked_add(other).expect("decimal add overflow")
+        self.checked_add(other).expect("十进制加法溢出")
     }
 }
 
@@ -525,7 +525,7 @@ impl std::ops::Sub for Decimal {
     #[allow(clippy::expect_used)]
     fn sub(self, other: Decimal) -> Decimal {
         // PANIC: 此 feature 运算符明确采用溢出即失败语义；资金路径应使用 checked_sub。
-        self.checked_sub(other).expect("decimal sub overflow")
+        self.checked_sub(other).expect("十进制减法溢出")
     }
 }
 
@@ -543,7 +543,7 @@ impl std::ops::Mul for Decimal {
     #[allow(clippy::expect_used)]
     fn mul(self, other: Decimal) -> Decimal {
         // PANIC: 此 feature 运算符明确采用溢出即失败语义；资金路径应使用 checked_mul。
-        self.checked_mul(other).expect("decimal mul overflow")
+        self.checked_mul(other).expect("十进制乘法溢出")
     }
 }
 
@@ -651,7 +651,7 @@ mod decimal_serde_wire {
             }
 
             fn visit_f64<E: de::Error>(self, _v: f64) -> Result<i128, E> {
-                Err(de::Error::custom("mantissa JSON number 精度不足；请使用十进制整数字符串"))
+                Err(de::Error::custom("JSON 数字格式的 mantissa 精度不足；请使用十进制整数字符串"))
             }
         }
         deserializer.deserialize_any(MantissaVisitor)
@@ -1333,7 +1333,7 @@ mod tests {
     }
 
     #[test]
-    #[should_panic(expected = "decimal scale exceeds MAX_SCALE")]
+    #[should_panic(expected = "十进制小数位数超过 MAX_SCALE")]
     fn new_panics_on_scale_above_max() {
         let _ = Decimal::new(1, u8::MAX);
     }
