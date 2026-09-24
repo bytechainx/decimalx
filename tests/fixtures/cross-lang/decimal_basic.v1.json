@@ -1,0 +1,10 @@
+{
+  "$schema": "wire-cross-lang-v1",
+  "type": "Decimal",
+  "schema_version": 1,
+  "payload": {
+    "mantissa": "1234567890123456789",
+    "scale": 4
+  },
+  "notes": "大整数 mantissa 字符串承载（闭合 DEC-RES-004 方向）。"
+}

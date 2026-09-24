@@ -1,0 +1,13 @@
+{
+  "$schema": "wire-cross-lang-v1",
+  "type": "Money",
+  "schema_version": 1,
+  "payload": {
+    "amount": {
+      "mantissa": "999",
+      "scale": 2
+    },
+    "currency": [85, 83, 68]
+  },
+  "notes": "Money wire；currency 仍为 3 字节数组。"
+}

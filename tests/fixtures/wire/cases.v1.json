@@ -1,0 +1,69 @@
+{
+  "$schema": "wire-golden-v1",
+  "type": "Decimal",
+  "schema_version": 1,
+  "cases": [
+    {
+      "name": "basic_wire_shape",
+      "wire": { "mantissa": 100, "scale": 2 },
+      "display": "1",
+      "notes": "序列化保留字段；Display normalize 后为 1（100e-2）。"
+    },
+    {
+      "name": "trailing_zero_kept_on_wire",
+      "construct": { "mantissa": 123450, "scale": 3 },
+      "wire": { "mantissa": 123450, "scale": 3 },
+      "display": "123.45",
+      "notes": "serde 不自动 normalize；Display 去尾随零。"
+    },
+    {
+      "name": "normalize_equals_semantically",
+      "construct": { "mantissa": 123450, "scale": 3 },
+      "normalized_wire": { "mantissa": 12345, "scale": 2 },
+      "notes": "数值相等；wire 字节在 normalize 前后可不同。"
+    },
+    {
+      "name": "parse_fixed_point",
+      "input": "123.45",
+      "wire": { "mantissa": 12345, "scale": 2 },
+      "display": "123.45"
+    },
+    {
+      "name": "scientific_notation_rejected",
+      "input": "1.5e3",
+      "expect_error": true,
+      "notes": "from_str 不接受科学计数法；解析失败。"
+    },
+    {
+      "name": "max_scale_boundary",
+      "construct": { "mantissa": 1, "scale": 18 },
+      "wire": { "mantissa": 1, "scale": 18 },
+      "notes": "MAX_SCALE = 18 合法上界。"
+    },
+    {
+      "name": "scale_above_max_rejected",
+      "wire_input": { "mantissa": 1, "scale": 19 },
+      "expect_error": true,
+      "notes": "反序列化拒绝 scale > MAX_SCALE。"
+    },
+    {
+      "name": "unknown_field_rejected",
+      "raw_json": "{\"mantissa\":1,\"scale\":0,\"extra\":true}",
+      "expect_error": true,
+      "notes": "deny_unknown_fields 有意保留（§5.2 例外）。"
+    },
+    {
+      "name": "negative_zero_display",
+      "input": "-0.00",
+      "wire": { "mantissa": 0, "scale": 2 },
+      "display": "0",
+      "notes": "解析保留 scale；Display normalize 为 0。"
+    },
+    {
+      "name": "zero",
+      "construct": { "mantissa": 0, "scale": 0 },
+      "wire": { "mantissa": 0, "scale": 0 },
+      "display": "0"
+    }
+  ]
+}

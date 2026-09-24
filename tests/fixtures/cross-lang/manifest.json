@@ -1,0 +1,10 @@
+{
+  "$schema": "wire-cross-lang-v1",
+  "schema_version": 1,
+  "samples": [
+    "decimal_basic.v1.json",
+    "money_usd.v1.json",
+    "tick_bid_ask.v1.json"
+  ],
+  "notes": "RFC cross-language wire v1 · C1 样例；mantissa 为十进制字符串。"
+}

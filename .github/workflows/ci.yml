@@ -1,0 +1,50 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  gate:
+    name: fmt / clippy / test
+    runs-on: ubuntu-latest
+    steps:
+      - name: 检出 decimalx
+        uses: actions/checkout@v4
+        with:
+          path: decimalx
+
+      - name: 检出 kernel
+        uses: actions/checkout@v4
+        with:
+          repository: bytechainx/kernel
+          path: kernel
+
+      - name: 迁移期间检出尚未进入 main 的 kernel
+        if: ${{ hashFiles('kernel/Cargo.toml') == '' }}
+        run: |
+          set -euo pipefail
+          git -C kernel fetch --depth 1 origin feature/initial-migration
+          git -C kernel checkout --detach FETCH_HEAD
+
+      - name: 安装 Rust 工具链（含 rustfmt 与 clippy）
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: decimalx
+
+      - name: cargo fmt --check
+        run: cargo fmt --manifest-path decimalx/Cargo.toml --check
+
+      - name: cargo clippy --all-targets -- -D warnings
+        run: cargo clippy --manifest-path decimalx/Cargo.toml --all-targets -- -D warnings
+
+      - name: cargo test
+        run: cargo test --manifest-path decimalx/Cargo.toml
