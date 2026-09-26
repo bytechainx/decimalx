@@ -50,5 +50,5 @@ harness = false
 [package.metadata.bytechainx]
 module_id = "decimalx"
 owner = "bytechainx"
-role = "kernel"
+role = "core"
 semantic_contract = "docs/标准.md"
