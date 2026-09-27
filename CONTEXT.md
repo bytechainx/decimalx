@@ -1,6 +1,6 @@
 # 项目上下文
 
-`decimalx` 是精确十进制与金额值对象 crate，当前版本 `0.1.8`。
+`decimalx` 是精确十进制与金额值对象 crate，当前版本 `0.1.9`。
 
 - 语义权威：[`docs/标准.md`](docs/标准.md)。
 - 公开 API：[`docs/API.md`](docs/API.md)；序列化格式：[`docs/WIRE.md`](docs/WIRE.md)。
