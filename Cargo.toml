@@ -1,6 +1,6 @@
 [package]
 name = "decimalx"
-version = "0.1.8"
+version = "0.1.9"
 edition = "2024"
 rust-version = "1.88"
 description = "精确十进制、货币、价格与数量值对象"
@@ -22,7 +22,7 @@ panicking-ops = []
 
 [dependencies]
 # path + version：满足 cargo-deny bans.wildcards=deny（禁止裸 path 通配依赖）
-kernel = { version = "0.4.2", path = "../kernel" }
+kernel = { version = "0.4.3", path = "../kernel" }
 serde = { version = "1", features = ["derive"] }
 
 [dev-dependencies]
@@ -50,5 +50,5 @@ harness = false
 [package.metadata.bytechainx]
 module_id = "decimalx"
 owner = "bytechainx"
-role = "core"
+role = "kernel"
 semantic_contract = "docs/标准.md"
