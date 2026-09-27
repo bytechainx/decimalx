@@ -4,7 +4,7 @@
 
 | 项目 | 值 |
 | --- | --- |
-| 版本 | `0.1.8` |
+| 版本 | `0.1.9` |
 | Rust | Edition 2024，MSRV 1.88 |
 | 许可 | MIT |
 | 发布 | 仅从 Git 源码消费，不发布到 crates.io |
@@ -22,7 +22,7 @@ git clone git@github.com:bytechainx/decimalx.git
 
 ```toml
 [dependencies]
-decimalx = { version = "0.1.8", path = "../decimalx" }
+decimalx = { version = "0.1.9", path = "../decimalx" }
 ```
 
 ## 主要类型
