@@ -22,7 +22,7 @@ panicking-ops = []
 
 [dependencies]
 # path + version：满足 cargo-deny bans.wildcards=deny（禁止裸 path 通配依赖）
-kernel = { version = "0.4.3", path = "../kernel" }
+kernel = { version = "0.5.0", path = "../kernel" }
 serde = { version = "1", features = ["derive"] }
 
 [dev-dependencies]
