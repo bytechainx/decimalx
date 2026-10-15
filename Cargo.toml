@@ -21,8 +21,8 @@ default = []
 panicking-ops = []
 
 [dependencies]
-# path + version：满足 cargo-deny bans.wildcards=deny（禁止裸 path 通配依赖）
-kernel = { version = "0.5.0", path = "../kernel" }
+# rev 须与 workspace crates.lock.json 登记的 kernel SHA 对齐
+kernel = { version = "0.5.0", git = "https://github.com/bytechainx/kernel.git", rev = "2b4e8422e82914562355f1912a0c4d26089c252f" }
 serde = { version = "1", features = ["derive"] }
 
 [dev-dependencies]

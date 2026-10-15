@@ -11,18 +11,13 @@
 
 ## 获取源码
 
-内部依赖采用 `path + version`。将依赖仓库并排克隆，使 `kernel` 路径依赖可解析：
+`kernel` 以 Git 依赖消费（`rev` 与 workspace `crates.lock.json` 登记 SHA 对齐），只克隆本仓即可构建。
 
-```bash
-git clone git@github.com:bytechainx/kernel.git
-git clone git@github.com:bytechainx/decimalx.git
-```
-
-在同一目录结构中配置：
+消费方使用 Git 依赖：
 
 ```toml
 [dependencies]
-decimalx = { version = "0.1.9", path = "../decimalx" }
+decimalx = { version = "0.1.9", git = "https://github.com/bytechainx/decimalx.git", rev = "<DECIMALX_SHA>" }
 ```
 
 ## 主要类型
