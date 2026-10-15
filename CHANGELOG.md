@@ -4,6 +4,10 @@
 
 ## [Unreleased]
 
+### 变更
+
+- `kernel` 依赖由 `path = "../kernel"` 改为 Git 依赖（`rev = 2b4e8422`，与 workspace lock 对齐）；只克隆本仓即可构建，CI 不再检出兄弟仓。公开 API 不变。
+
 ## [0.1.9] - 2026-09-27
 
 - 将本体角色登记为 `kernel`，与 Feature 008 冻结名册一致；公开 API 不变。
