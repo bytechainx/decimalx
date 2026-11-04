@@ -68,5 +68,5 @@ cargo run -p decimalx --example decimalx_basic
 ## 覆盖
 
 `tests/public_api_surface.rs` + `entry_checked_ops` / `oracle_diff` / `boundary_matrix` / `adversarial_serde` / `proptest_ops`。  
-API 棘轮：`docs/api-baselines/decimalx.txt`。  
+API 棘轮：[`tests/public_api_surface.rs`](../tests/public_api_surface.rs)（本仓公开消费面测试；原 `docs/api-baselines/decimalx.txt` 不存在）。  
 Wire 边界：见 [WIRE.md](./WIRE.md)。
