@@ -51,4 +51,6 @@ harness = false
 module_id = "decimalx"
 owner = "bytechainx"
 role = "kernel"
+# 行为合同唯一权威：元仓 specs/repos/type/decimalx（Owner 裁定 2026-11-05）。
+# 本字段由 check-cola-ontology.mjs 校验落点存在，故保留指向本仓派生摘要。
 semantic_contract = "docs/标准.md"
