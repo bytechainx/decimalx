@@ -1,6 +1,6 @@
 [package]
 name = "decimalx"
-version = "0.1.9"
+version = "0.2.0"
 edition = "2024"
 rust-version = "1.88"
 description = "精确十进制、货币、价格与数量值对象"

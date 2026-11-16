@@ -2,7 +2,7 @@
 //! 对抗性 / 模糊输入反序列化（W1 fuzz 轻量入口）。
 //!
 //! 完整 `cargo fuzz` 可后续加；本文件用 proptest 覆盖任意 JSON 片段与字节噪声，
-//! 保证：反序列化失败或得到合法 `Decimal`（validate 成功），且 checked 运算不 panic。
+//! 保证：反序列化失败或得到合法 `Decimal`，且 checked 运算不 panic。
 
 use decimalx::{Decimal, MAX_SCALE, RoundingStrategy};
 use proptest::prelude::*;
@@ -14,7 +14,6 @@ proptest! {
         match Decimal::try_new(m, s) {
             Ok(d) => {
                 prop_assert!(d.scale() <= MAX_SCALE);
-                prop_assert!(d.validate().is_ok());
                 let _ = d.checked_add(Decimal::ZERO);
                 let _ = d.checked_mul(Decimal::new(1, 0));
                 let _ = d.checked_div(Decimal::new(2, 0), RoundingStrategy::Floor);

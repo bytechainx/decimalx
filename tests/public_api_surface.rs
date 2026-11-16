@@ -2,8 +2,8 @@
 //! decimalx 公开消费面：构造器、四则、newtypes、Money/Currency、错误与舍入。
 
 use decimalx::{
-    Currency, Decimal, DecimalError, DecimalErrorKind, DecimalLimits, DecimalResult, MAX_SCALE,
-    Money, Price, Qty, Ratio, RoundingStrategy, TECH_MAX_POW10_EXP, WIRE_SCHEMA_VERSION,
+    Currency, Decimal, DecimalError, DecimalErrorKind, DecimalResult, MAX_SCALE, Money, Price, Qty,
+    Ratio, RoundingStrategy, TECH_MAX_POW10_EXP, WIRE_SCHEMA_VERSION,
 };
 use std::cmp::Ordering;
 use std::str::FromStr;
@@ -12,8 +12,6 @@ use std::str::FromStr;
 fn constants_and_limits() {
     assert_eq!(MAX_SCALE, 18);
     assert_eq!(TECH_MAX_POW10_EXP, 38);
-    assert_eq!(DecimalLimits::MAX_SCALE, MAX_SCALE);
-    assert_eq!(DecimalLimits::TECH_MAX_POW10_EXP, TECH_MAX_POW10_EXP);
     assert_eq!(WIRE_SCHEMA_VERSION, 1);
 }
 
@@ -23,8 +21,6 @@ fn decimal_construct_ops_normalize() {
     assert_eq!(z.mantissa(), 0);
     let d = Decimal::new(1234, 2);
     assert_eq!(d.scale(), 2);
-    assert!(d.is_within_limits());
-    assert_eq!(d.validate().unwrap().mantissa(), 1234);
     assert!(Decimal::try_new(1, 99).is_err());
 
     let a = Decimal::new(10, 0);
@@ -33,7 +29,7 @@ fn decimal_construct_ops_normalize() {
     assert_eq!(a.checked_sub(b).unwrap().mantissa(), 7);
     assert_eq!(a.checked_mul(b).unwrap().mantissa(), 30);
     let q = a.checked_div(b, RoundingStrategy::HalfEven).unwrap();
-    assert_eq!(a.div(b, RoundingStrategy::HalfEven).unwrap(), q);
+    assert_eq!(a.checked_div(b, RoundingStrategy::HalfEven).unwrap(), q);
     assert_eq!(a.cmp_value(b), Ordering::Greater);
     assert!(a.eq_value(Decimal::new(100, 1)));
     let r = a.rescale(2, RoundingStrategy::HalfUp);
@@ -82,7 +78,7 @@ fn all_rounding_strategies() {
     ] {
         let q = a.checked_div(b, strategy).unwrap();
         assert!(q.mantissa() != 0 || a.mantissa() == 0);
-        assert_eq!(a.div(b, strategy).unwrap(), q);
+        assert_eq!(a.checked_div(b, strategy).unwrap(), q);
     }
 }
 
@@ -99,18 +95,15 @@ fn newtypes_money_currency_errors() {
     let c = Currency::try_new(*b"USD").unwrap();
     assert_eq!(c.as_str(), "USD");
     assert_eq!(c.as_bytes(), *b"USD");
-    assert!(c.is_valid());
-    assert!(c.validate().is_ok());
     assert!(Currency::try_new(*b"usd").is_err());
     let c2 = Currency::from_str("EUR").unwrap();
     assert_eq!(c2.as_str(), "EUR");
     assert!(Currency::from_str("us").is_err());
     assert!(Currency::from_str("usd").is_err());
 
-    let m = Money::try_new(d, c).unwrap();
+    let m = Money::new(d, c);
     assert_eq!(m.amount(), d);
     assert_eq!(m.currency(), c);
-    assert!(m.validate().is_ok());
 
     let err = Decimal::try_new(1, 99).unwrap_err();
     assert_eq!(err.kind(), DecimalErrorKind::Scale);

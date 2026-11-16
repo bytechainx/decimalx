@@ -2,11 +2,20 @@
 
 本仓库从独立 Git 源码版本 `0.1.8` 开始维护，不发布到 crates.io。
 
-## [Unreleased]
+## [0.2.0] - 2026-11-17
+
+### 移除
+
+- **破坏性变更**：删除 `DecimalLimits`（`MAX_SCALE` / `TECH_MAX_POW10_EXP` 的重复常量入口）。
+- **破坏性变更**：删除 `Decimal::is_within_limits` 与 `Decimal::validate`（构造后恒真/恒 `Ok` 的冗余自检）。
+- **破坏性变更**：删除 `Currency::is_valid` 与 `Currency::validate`（同上，私有字段不变量保证恒真）。
+- **破坏性变更**：删除 `Money::validate`；`Money::try_new` 改为恒成功的 `Money::new`（`amount`/`currency` 类型已各自保证合法，原 `Result` 不可能为 `Err`）。
+- **破坏性变更**：删除 `Decimal::from_str_exact`（`FromStr`/`parse` 的别名）。
+- **破坏性变更**：删除 `Decimal::div` 别名，统一使用 `checked_div`。
 
 ### 变更
 
-- `kernel` 依赖由 `path = "../kernel"` 改为 Git 依赖（`rev = 2b4e8422`，与 workspace lock 对齐）；只克隆本仓即可构建，CI 不再检出兄弟仓。公开 API 不变。
+- `kernel` 依赖由 `path = "../kernel"` 改为 Git 依赖（`rev = 2b4e8422`，与 workspace lock 对齐）；只克隆本仓即可构建，CI 不再检出兄弟仓。
 
 ## [0.1.9] - 2026-11-15
 

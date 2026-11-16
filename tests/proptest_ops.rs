@@ -80,18 +80,18 @@ proptest! {
     #[test]
     fn div_no_panic(a in arb_decimal(), b in arb_decimal()) {
         if b.mantissa() != 0 {
-            let _ = a.div(b, RoundingStrategy::HalfUp);
-            let _ = a.div(b, RoundingStrategy::Floor);
-            let _ = a.div(b, RoundingStrategy::Ceiling);
-            let _ = a.div(b, RoundingStrategy::HalfDown);
-            let _ = a.div(b, RoundingStrategy::HalfEven);
+            let _ = a.checked_div(b, RoundingStrategy::HalfUp);
+            let _ = a.checked_div(b, RoundingStrategy::Floor);
+            let _ = a.checked_div(b, RoundingStrategy::Ceiling);
+            let _ = a.checked_div(b, RoundingStrategy::HalfDown);
+            let _ = a.checked_div(b, RoundingStrategy::HalfEven);
         }
     }
 
     /// 除法除以零返回 Err
     #[test]
     fn div_by_zero_errors(a in arb_decimal()) {
-        let result = a.div(Decimal::ZERO, RoundingStrategy::HalfUp);
+        let result = a.checked_div(Decimal::ZERO, RoundingStrategy::HalfUp);
         prop_assert!(result.is_err());
     }
 
@@ -102,7 +102,7 @@ proptest! {
         let _ = a.checked_sub(b);
         let _ = a.checked_mul(b);
         if b.mantissa() != 0 {
-            let _ = a.div(b, RoundingStrategy::HalfUp);
+            let _ = a.checked_div(b, RoundingStrategy::HalfUp);
         }
     }
 

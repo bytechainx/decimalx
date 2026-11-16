@@ -3,10 +3,7 @@
 //!
 //! 非 mock、非 re-implementation：直接调用 `decimalx` 导出 API。
 
-use decimalx::{
-    Currency, Decimal, DecimalLimits, MAX_SCALE, Money, Price, Qty, Ratio, RoundingStrategy,
-    TECH_MAX_POW10_EXP,
-};
+use decimalx::{Currency, Decimal, MAX_SCALE, Money, Price, Qty, Ratio, RoundingStrategy};
 
 #[test]
 fn entry_checked_add_one_plus_half() {
@@ -87,12 +84,10 @@ fn entry_div_zero_and_overflow_err() {
 #[test]
 fn entry_money_currency_parse() {
     let c: Currency = "USD".parse().expect("currency parse");
-    let m = Money::try_new(Decimal::try_new(999, 2).unwrap(), c).unwrap();
+    let m = Money::new(Decimal::try_new(999, 2).unwrap(), c);
     assert_eq!(m.currency().as_str(), "USD");
     assert_eq!(m.amount().mantissa(), 999);
     // 生产路径接受 MAX_SCALE 并拒绝 +1（驱动真实 exported 常量）
-    assert_eq!(MAX_SCALE, DecimalLimits::MAX_SCALE);
-    assert_eq!(TECH_MAX_POW10_EXP, DecimalLimits::TECH_MAX_POW10_EXP);
     assert_eq!(MAX_SCALE, 18);
     assert!(Decimal::try_new(1, MAX_SCALE).is_ok());
     assert!(Decimal::try_new(1, MAX_SCALE.saturating_add(1)).is_err());

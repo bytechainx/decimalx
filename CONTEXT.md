@@ -1,6 +1,6 @@
 # 项目上下文
 
-`decimalx` 是精确十进制与金额值对象 crate，当前版本 `0.1.9`。
+`decimalx` 是精确十进制与金额值对象 crate，当前版本 `0.2.0`。
 
 - 行为合同唯一权威：元仓 `specs/repos/type/decimalx` 的 `SPEC.md` 与 `specs/01..10`（Owner 裁定 2026-11-05）；本仓 [`docs/标准.md`](docs/标准.md) 为派生摘要。
 - 公开 API：[`docs/API.md`](docs/API.md)；序列化格式：[`docs/WIRE.md`](docs/WIRE.md)。
