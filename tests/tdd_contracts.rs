@@ -7,7 +7,7 @@
 //! // TDD-PROBE: Decimal::rescale | 变异：调整 scale 时忽略舍入策略 | 红=rescale_uses_explicit_strategy | 绿=rescale_uses_explicit_strategy
 //! // TDD-PROBE: DecimalError::kind | 变异：除零错误映射为 parse | 红=error_kind_is_stable | 绿=error_kind_is_stable
 //! // TDD-PROBE: Currency::try_new | 变异：接受小写字节 | 红=currency_requires_uppercase_ascii | 绿=currency_requires_uppercase_ascii
-//! // TDD-PROBE: Money::try_new | 变异：不校验金额和币种 | 红=money_checks_currency | 绿=money_checks_currency
+//! // TDD-PROBE: Money::new | 变异：amount 与 currency 字段写反 | 红=money_checks_currency | 绿=money_checks_currency
 
 use decimalx::{
     Currency, Decimal, DecimalError, DecimalErrorKind, MAX_SCALE, Money, RoundingStrategy,
@@ -55,5 +55,7 @@ fn currency_requires_uppercase_ascii() {
 fn money_checks_currency() {
     let currency = Currency::try_new(*b"USD");
     assert!(currency.is_ok());
-    assert!(Money::try_new(Decimal::ONE, currency.unwrap()).is_ok());
+    let m = Money::new(Decimal::ONE, currency.unwrap());
+    assert_eq!(m.currency().as_str(), "USD");
+    assert_eq!(m.amount(), Decimal::ONE);
 }

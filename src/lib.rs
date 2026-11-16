@@ -54,17 +54,6 @@ pub const TECH_MAX_POW10_EXP: u32 = 38;
 /// - 破坏性字段 rename / shape 变更必须递增本常量，并由 `wire_schema_v1_*` 测试拦截。
 pub const WIRE_SCHEMA_VERSION: u32 = 1;
 
-/// 十进制表示边界（生产 fallible 路径）。
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct DecimalLimits;
-
-impl DecimalLimits {
-    /// 与 [`MAX_SCALE`] 相同。
-    pub const MAX_SCALE: u8 = MAX_SCALE;
-    /// 与 [`TECH_MAX_POW10_EXP`] 相同。
-    pub const TECH_MAX_POW10_EXP: u32 = TECH_MAX_POW10_EXP;
-}
-
 /// 十进制数：`mantissa × 10^(-scale)`（spec §4.2）。
 ///
 /// 相等性与排序按**数值**（scale 对齐后）比较，而非按字段结构。
@@ -117,16 +106,6 @@ impl Decimal {
         self.scale
     }
 
-    /// 当前值是否满足生产 scale 上限（构造成功后恒为 true）。
-    pub const fn is_within_limits(self) -> bool {
-        self.scale <= MAX_SCALE
-    }
-
-    /// 校验 scale 上限；失败返回 `Err`（对已构造值恒 Ok）。
-    pub fn validate(self) -> DecimalResult<Self> {
-        Self::try_new(self.mantissa, self.scale)
-    }
-
     /// 零值：`0 × 10^0`。
     pub const ZERO: Self = Self { mantissa: 0, scale: 0 };
 
@@ -173,14 +152,6 @@ impl Decimal {
             return Err(DecimalError::RepresentationOverflow);
         }
         Ok(Self { mantissa: self.mantissa.unsigned_abs() as i128, scale: self.scale })
-    }
-
-    /// 精确解析十进制字符串（与 [`FromStr`] 同语义）。
-    ///
-    /// 命名对齐 `rust_decimal::Decimal::from_str_exact`，便于底座迁移；
-    /// 生产路径亦可直接 `s.parse::<Decimal>()`。
-    pub fn from_str_exact(s: &str) -> DecimalResult<Self> {
-        s.parse()
     }
 
     /// 运算结果检查：若 scale 越界，先 `normalize` 去掉尾随零再判定（保留可精确表示的乘积）。
@@ -314,11 +285,6 @@ impl Decimal {
         let r = numerator.checked_rem(denominator).expect("除法成功时余数运算也应成功");
         let rounded = apply_rounding(q, r, denominator, strategy)?;
         Decimal { mantissa: rounded, scale: target_scale }.finish()
-    }
-
-    /// 除法（与 [`Self::checked_div`] 相同；保留既有公开名）。
-    pub fn div(self, other: Decimal, strategy: RoundingStrategy) -> DecimalResult<Decimal> {
-        self.checked_div(other, strategy)
     }
 
     /// 显式缩位/扩位到目标 scale（ADR-006）。
@@ -775,7 +741,7 @@ mod tests {
         }
     }
 
-    // ── 扩展便利 API：常量 / From 族 / Sum / from_str_exact（kp4 阶段 1.b） ──
+    // ── 常量 / From 族 / Sum（kp4 阶段 1.b） ──
 
     #[test]
     fn numeric_constants() {
@@ -807,14 +773,6 @@ mod tests {
         // 消费侧常见：`Decimal::from(slice.len())`
         let xs = [Decimal::ONE, Decimal::TWO];
         assert_eq!(Decimal::from(xs.len()), Decimal::TWO);
-    }
-
-    #[test]
-    fn from_str_exact_matches_from_str() {
-        assert_eq!(Decimal::from_str_exact("12.5").unwrap(), "12.5".parse().unwrap());
-        assert_eq!(Decimal::from_str_exact("-0.01").unwrap().to_string(), "-0.01");
-        assert!(Decimal::from_str_exact("nan").is_err());
-        assert!(Decimal::from_str_exact("").is_err());
     }
 
     #[test]
@@ -924,7 +882,7 @@ mod tests {
         // 10 / 2.5 = 4.0
         let a = Decimal::new(10, 0);
         let b = Decimal::new(25, 1);
-        let c = a.div(b, RoundingStrategy::HalfUp).unwrap();
+        let c = a.checked_div(b, RoundingStrategy::HalfUp).unwrap();
         assert_eq!(c, Decimal::new(40, 1));
     }
 
@@ -933,7 +891,7 @@ mod tests {
         // 10/3 = 3.333… → scale 0 时 HalfUp 应为 3（非中点）
         let a = Decimal::new(10, 0);
         let b = Decimal::new(3, 0);
-        let c = a.div(b, RoundingStrategy::HalfUp).unwrap();
+        let c = a.checked_div(b, RoundingStrategy::HalfUp).unwrap();
         assert_eq!(c.mantissa(), 3);
         assert_eq!(c.scale(), 0);
     }
@@ -942,7 +900,7 @@ mod tests {
     fn decimal_div_floor() {
         let a = Decimal::new(10, 0);
         let b = Decimal::new(3, 0);
-        let c = a.div(b, RoundingStrategy::Floor).unwrap();
+        let c = a.checked_div(b, RoundingStrategy::Floor).unwrap();
         assert_eq!(c.mantissa(), 3);
     }
 
@@ -950,7 +908,7 @@ mod tests {
     fn decimal_div_by_zero_errors() {
         let a = Decimal::new(1, 0);
         let b = Decimal::ZERO;
-        let err = a.div(b, RoundingStrategy::Floor).unwrap_err();
+        let err = a.checked_div(b, RoundingStrategy::Floor).unwrap_err();
         assert_eq!(err.kind(), DecimalErrorKind::DivisionByZero);
     }
 
@@ -970,7 +928,7 @@ mod tests {
             let err = a.checked_div(b, strategy).expect_err("must not panic");
             assert_eq!(err.kind(), DecimalErrorKind::Mantissa, "strategy={strategy:?}: {err}");
             // div 别名同一路径
-            assert!(a.div(b, strategy).is_err());
+            assert!(a.checked_div(b, strategy).is_err());
         }
         // 对照：乘法路径对同一边界也返回 Err
         assert!(a.checked_mul(b).is_err());
@@ -981,31 +939,43 @@ mod tests {
     #[test]
     fn half_up_exact_half_away_from_zero() {
         // 15/2 = 7.5 → HalfUp → 8
-        let c = Decimal::new(15, 0).div(Decimal::new(2, 0), RoundingStrategy::HalfUp).unwrap();
+        let c =
+            Decimal::new(15, 0).checked_div(Decimal::new(2, 0), RoundingStrategy::HalfUp).unwrap();
         assert_eq!(c.mantissa(), 8);
         // -15/2 = -7.5 → HalfUp → -8
-        let c = Decimal::new(-15, 0).div(Decimal::new(2, 0), RoundingStrategy::HalfUp).unwrap();
+        let c =
+            Decimal::new(-15, 0).checked_div(Decimal::new(2, 0), RoundingStrategy::HalfUp).unwrap();
         assert_eq!(c.mantissa(), -8);
     }
 
     #[test]
     fn half_down_exact_half_toward_zero() {
-        let c = Decimal::new(15, 0).div(Decimal::new(2, 0), RoundingStrategy::HalfDown).unwrap();
+        let c = Decimal::new(15, 0)
+            .checked_div(Decimal::new(2, 0), RoundingStrategy::HalfDown)
+            .unwrap();
         assert_eq!(c.mantissa(), 7);
-        let c = Decimal::new(-15, 0).div(Decimal::new(2, 0), RoundingStrategy::HalfDown).unwrap();
+        let c = Decimal::new(-15, 0)
+            .checked_div(Decimal::new(2, 0), RoundingStrategy::HalfDown)
+            .unwrap();
         assert_eq!(c.mantissa(), -7);
     }
 
     #[test]
     fn half_even_ties_to_even() {
         // 15/2 = 7.5 → 向偶数 8
-        let c = Decimal::new(15, 0).div(Decimal::new(2, 0), RoundingStrategy::HalfEven).unwrap();
+        let c = Decimal::new(15, 0)
+            .checked_div(Decimal::new(2, 0), RoundingStrategy::HalfEven)
+            .unwrap();
         assert_eq!(c.mantissa(), 8);
         // 13/2 = 6.5 → 向偶数 6
-        let c = Decimal::new(13, 0).div(Decimal::new(2, 0), RoundingStrategy::HalfEven).unwrap();
+        let c = Decimal::new(13, 0)
+            .checked_div(Decimal::new(2, 0), RoundingStrategy::HalfEven)
+            .unwrap();
         assert_eq!(c.mantissa(), 6);
         // -13/2 = -6.5 → -6（偶数）
-        let c = Decimal::new(-13, 0).div(Decimal::new(2, 0), RoundingStrategy::HalfEven).unwrap();
+        let c = Decimal::new(-13, 0)
+            .checked_div(Decimal::new(2, 0), RoundingStrategy::HalfEven)
+            .unwrap();
         assert_eq!(c.mantissa(), -6);
     }
 
@@ -1015,12 +985,12 @@ mod tests {
         // 10/3 = 3.333… HalfUp → 3；Ceiling → 4
         let a = Decimal::new(10, 0);
         let b = Decimal::new(3, 0);
-        assert_eq!(a.div(b, RoundingStrategy::HalfUp).unwrap().mantissa(), 3);
-        assert_eq!(a.div(b, RoundingStrategy::Ceiling).unwrap().mantissa(), 4);
+        assert_eq!(a.checked_div(b, RoundingStrategy::HalfUp).unwrap().mantissa(), 3);
+        assert_eq!(a.checked_div(b, RoundingStrategy::Ceiling).unwrap().mantissa(), 4);
         // 2/5 = 0.4 < 0.5 → HalfUp 保持 0
         assert_eq!(
             Decimal::new(2, 0)
-                .div(Decimal::new(5, 0), RoundingStrategy::HalfUp)
+                .checked_div(Decimal::new(5, 0), RoundingStrategy::HalfUp)
                 .unwrap()
                 .mantissa(),
             0
@@ -1028,7 +998,7 @@ mod tests {
         // 3/5 = 0.6 > 0.5 → HalfUp → 1
         assert_eq!(
             Decimal::new(3, 0)
-                .div(Decimal::new(5, 0), RoundingStrategy::HalfUp)
+                .checked_div(Decimal::new(5, 0), RoundingStrategy::HalfUp)
                 .unwrap()
                 .mantissa(),
             1
@@ -1040,8 +1010,8 @@ mod tests {
         // -10/3 = -3.333… Floor → -4, Ceiling → -3
         let a = Decimal::new(-10, 0);
         let b = Decimal::new(3, 0);
-        assert_eq!(a.div(b, RoundingStrategy::Floor).unwrap().mantissa(), -4);
-        assert_eq!(a.div(b, RoundingStrategy::Ceiling).unwrap().mantissa(), -3);
+        assert_eq!(a.checked_div(b, RoundingStrategy::Floor).unwrap().mantissa(), -4);
+        assert_eq!(a.checked_div(b, RoundingStrategy::Ceiling).unwrap().mantissa(), -3);
     }
 
     // ── rescale ────────────────────────────────────────────────────
@@ -1152,7 +1122,7 @@ mod tests {
 
     #[test]
     fn wire_schema_v1_money_exact_json_shape() {
-        let m = Money::try_new(Decimal::new(999, 2), "USD".parse().unwrap()).unwrap();
+        let m = Money::new(Decimal::new(999, 2), "USD".parse().unwrap());
         let json = serde_json::to_string(&m).unwrap();
         assert_eq!(json, r#"{"amount":{"mantissa":"999","scale":2},"currency":[85,83,68]}"#);
         let back: Money = serde_json::from_str(&json).unwrap();
@@ -1202,7 +1172,7 @@ mod tests {
 
     #[test]
     fn serde_roundtrip_money() {
-        let m = Money::try_new(Decimal::new(999, 2), "USD".parse().unwrap()).unwrap();
+        let m = Money::new(Decimal::new(999, 2), "USD".parse().unwrap());
         let json = serde_json::to_string(&m).unwrap();
         let back: Money = serde_json::from_str(&json).unwrap();
         assert_eq!(back, m);
@@ -1224,12 +1194,6 @@ mod tests {
         assert!(r.is_err());
         let r: Result<Currency, _> = "usd".parse();
         assert!(r.is_err());
-    }
-
-    #[test]
-    fn no_f32_f64_in_api() {
-        let d = Decimal::new(1, 0);
-        let _ = (d.mantissa(), d.scale());
     }
 
     #[test]
@@ -1394,7 +1358,6 @@ mod tests {
         assert_eq!(MAX_SCALE, 18);
         assert!(Decimal::try_new(1, MAX_SCALE).is_ok());
         assert!(Decimal::try_new(1, MAX_SCALE + 1).is_err());
-        assert!(Decimal::new(1, MAX_SCALE).is_within_limits());
     }
 
     #[test]
@@ -1431,11 +1394,10 @@ mod tests {
     }
 
     #[test]
-    fn currency_try_new_and_money_try_new() {
+    fn currency_try_new_and_money_new() {
         let c = Currency::try_new(*b"USD").unwrap();
-        assert!(c.is_valid());
         assert!(Currency::try_new(*b"usd").is_err());
-        assert!(Money::try_new(Decimal::try_new(100, 2).unwrap(), c).is_ok());
+        let _ = Money::new(Decimal::try_new(100, 2).unwrap(), c);
         assert!(Decimal::try_new(1, MAX_SCALE + 1).is_err());
     }
 
@@ -1466,11 +1428,8 @@ mod tests {
     }
 
     #[test]
-    fn money_and_currency_validate_surface() {
-        let ok =
-            Money::try_new(Decimal::try_new(1, 2).unwrap(), Currency::try_new(*b"USD").unwrap())
-                .unwrap();
-        assert!(ok.validate().is_ok());
+    fn money_and_currency_surface() {
+        let ok = Money::new(Decimal::try_new(1, 2).unwrap(), Currency::try_new(*b"USD").unwrap());
         assert_eq!(ok.amount().mantissa(), 1);
         assert_eq!(ok.currency().as_str(), "USD");
         assert!(Currency::try_new(*b"usd").is_err());

@@ -88,16 +88,6 @@ impl Currency {
         }
         Ok(Self(bytes))
     }
-
-    /// 当前字节是否全部为大写 ASCII（构造成功后恒 true）。
-    pub fn is_valid(self) -> bool {
-        self.0.iter().all(|c| c.is_ascii_uppercase())
-    }
-
-    /// 校验后返回自身，否则 `Err`。
-    pub fn validate(self) -> DecimalResult<Self> {
-        Self::try_new(self.0)
-    }
 }
 
 impl Serialize for Currency {
@@ -127,7 +117,7 @@ impl std::str::FromStr for Currency {
     }
 }
 
-/// 金额（spec §4.2）。字段私有；生产请用 [`Money::try_new`]。
+/// 金额（spec §4.2）。字段私有；`amount` 与 `currency` 类型已各自保证合法。
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Money {
     amount: Decimal,
@@ -135,11 +125,9 @@ pub struct Money {
 }
 
 impl Money {
-    /// 生产构造：同时校验 amount scale 与 currency 合法性。
-    pub fn try_new(amount: Decimal, currency: Currency) -> DecimalResult<Self> {
-        let amount = amount.validate()?;
-        let currency = currency.validate()?;
-        Ok(Self { amount, currency })
+    /// 由已校验的 [`Decimal`] 与 [`Currency`] 构造（恒成功）。
+    pub const fn new(amount: Decimal, currency: Currency) -> Self {
+        Self { amount, currency }
     }
 
     /// 金额数值。
@@ -150,11 +138,6 @@ impl Money {
     /// 币种。
     pub const fn currency(self) -> Currency {
         self.currency
-    }
-
-    /// 校验 amount/currency 后返回自身。
-    pub fn validate(self) -> DecimalResult<Self> {
-        Self::try_new(self.amount, self.currency)
     }
 }
 
@@ -177,6 +160,6 @@ impl<'de> Deserialize<'de> for Money {
             currency: Currency,
         }
         let w = MoneyWire::deserialize(deserializer)?;
-        Money::try_new(w.amount, w.currency).map_err(de::Error::custom)
+        Ok(Money::new(w.amount, w.currency))
     }
 }

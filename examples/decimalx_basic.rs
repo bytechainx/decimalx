@@ -27,7 +27,7 @@ fn main() {
     assert!(q.mantissa() != 0);
 
     let ccy = Currency::try_new(*b"USD").expect("currency");
-    let money = Money::try_new(a, ccy).expect("money");
+    let money = Money::new(a, ccy);
     assert_eq!(money.currency().as_str(), "USD");
     assert_eq!(money.amount().mantissa(), 10);
 

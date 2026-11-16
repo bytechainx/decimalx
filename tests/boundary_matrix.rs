@@ -147,11 +147,11 @@ fn serde_rejects_illegal_scale_and_currency() {
 }
 
 #[test]
-fn currency_and_money_validate() {
+fn currency_and_money_surface() {
     assert!(Currency::try_new(*b"USD").is_ok());
     assert!(Currency::try_new(*b"usd").is_err());
     assert!("USDT".parse::<Currency>().is_err());
-    let m = Money::try_new(Decimal::new(1, 0), Currency::try_new(*b"USD").unwrap()).unwrap();
+    let m = Money::new(Decimal::new(1, 0), Currency::try_new(*b"USD").unwrap());
     assert_eq!(m.currency().as_str(), "USD");
 }
 
